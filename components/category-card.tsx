@@ -20,7 +20,8 @@ const CATEGORIES: Category[] = [
 
 interface CategoryCardProps {
   summary: CategorySummary
-  onUpdateTransaction: (transactionId: string, category: Category) => void
+  // CORRECTED: The ID is a number, matching the database schema.
+  onUpdateTransaction: (transactionId: number, category: Category) => void
 }
 
 export function CategoryCard({ summary, onUpdateTransaction }: CategoryCardProps) {
@@ -63,10 +64,20 @@ export function CategoryCard({ summary, onUpdateTransaction }: CategoryCardProps
 
 interface TransactionRowProps {
   transaction: Transaction
-  onUpdateCategory: (transactionId: string, category: Category) => void
+  // CORRECTED: The ID is a number.
+  onUpdateCategory: (transactionId: number, category: Category) => void
 }
 
 function TransactionRow({ transaction, onUpdateCategory }: TransactionRowProps) {
+  const handleCategoryChange = (newCategory: Category) => {
+    // ADDED: A safety check to ensure we only call the update function with a valid ID.
+    if (transaction.id === undefined) {
+      console.error("Cannot update a transaction without an ID.", transaction);
+      return;
+    }
+    onUpdateCategory(transaction.id, newCategory);
+  };
+
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
       <div className="flex-1 min-w-0">
@@ -74,7 +85,7 @@ function TransactionRow({ transaction, onUpdateCategory }: TransactionRowProps) 
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate">{transaction.description}</div>
             <div className="text-sm text-muted-foreground">
-              {new Date(transaction.date).toLocaleDateString()} • {transaction.sourceFile}
+              {new Date(transaction.date).toLocaleDateString()} • {transaction.source_file}
             </div>
           </div>
         </div>
@@ -86,7 +97,7 @@ function TransactionRow({ transaction, onUpdateCategory }: TransactionRowProps) 
         <div className="w-36">
           <Select
             value={transaction.category}
-            onValueChange={(value) => onUpdateCategory(transaction.id, value as Category)}
+            onValueChange={(value) => handleCategoryChange(value as Category)}
           >
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />

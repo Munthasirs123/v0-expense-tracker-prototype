@@ -1,84 +1,141 @@
-import type { Transaction, Month, LearningRule } from "./types"
+// lib/storage.ts
 
-const STORAGE_KEYS = {
-  TRANSACTIONS: "expense-tracker-transactions",
-  MONTHS: "expense-tracker-months",
-  LEARNING_RULES: "expense-tracker-learning-rules",
+import { createClient } from "@/lib/supabase/client"
+import type { LearningRule, Month, Transaction, Category } from "./types"
+
+// This file now contains functions to interact with your Supabase database.
+
+// --- Transaction Functions ---
+
+/**
+ * Fetches all transactions for a specific month belonging to the current user.
+ * RLS policies in Supabase ensure the user can only fetch their own data.
+ */
+export async function getTransactionsByMonth(monthId: string): Promise<Transaction[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("month_id", monthId)
+    .order("date", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching transactions:", error.message)
+    return []
+  }
+  return data || []
 }
 
-// Transaction storage
-export function saveTransactions(transactions: Transaction[]): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions))
+/**
+ * Updates the category of a single transaction.
+ */
+export async function updateTransactionCategory(transactionId: number, category: Category) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from("transactions")
+    .update({ category })
+    .eq("id", transactionId)
+
+  if (error) {
+    console.error("Error updating transaction category:", error.message)
   }
 }
 
-export function getTransactions(): Transaction[] {
-  if (typeof window !== "undefined") {
-    const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS)
-    return data ? JSON.parse(data) : []
+// --- Month Functions ---
+
+/**
+ * Fetches a single month's summary data for the current user.
+ */
+export async function getMonth(monthId: string): Promise<Month | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("months")
+    .select("*")
+    .eq("id", monthId)
+    .single() // Expects only one row for the current user
+
+  if (error) {
+    // It's normal for this to error if the month doesn't exist yet, so we don't always log it.
+    return null
   }
-  return []
+  return data
 }
 
-export function getTransactionsByMonth(monthId: string): Transaction[] {
-  return getTransactions().filter((t) => t.monthId === monthId)
+/**
+ * NEW: Fetches all month summaries for the current user.
+ */
+export async function getMonths(): Promise<Month[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("months")
+    .select("*")
+    .order("id", { ascending: false }); // Order by YYYY-MM descending (most recent first)
+
+  if (error) {
+    console.error("Error fetching months:", error.message);
+    return [];
+  }
+  return data || [];
 }
 
-// Month storage
-export function saveMonths(months: Month[]): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEYS.MONTHS, JSON.stringify(months))
+
+// --- Learning Rule Functions ---
+
+/**
+ * Fetches all learning rules for the current user.
+ */
+export async function getLearningRules(): Promise<LearningRule[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from("learning_rules").select("*")
+
+  if (error) {
+    console.error("Error fetching learning rules:", error.message)
+    return []
+  }
+  return data || []
+}
+
+/**
+ * Adds or updates a learning rule for the current user.
+ * 'upsert' will INSERT a new rule or UPDATE an existing one if the primary key
+ * (merchant_pattern, user_id) already exists.
+ */
+export async function addLearningRule(rule: LearningRule) {
+  const supabase = createClient()
+  const { error } = await supabase.from("learning_rules").upsert(rule)
+
+  if (error) {
+    console.error("Error adding learning rule:", error.message)
   }
 }
 
-export function getMonths(): Month[] {
-  if (typeof window !== "undefined") {
-    const data = localStorage.getItem(STORAGE_KEYS.MONTHS)
-    return data ? JSON.parse(data) : []
-  }
-  return []
-}
+// --- Upload Finalization Function ---
 
-export function getMonth(monthId: string): Month | null {
-  const months = getMonths()
-  return months.find((m) => m.id === monthId) || null
-}
+/**
+ * Saves all data from a finalized upload in a single operation.
+ * This involves updating months and inserting transactions.
+ */
+export async function saveFinalizedUpload(
+  transactionsToInsert: Omit<Transaction, "id" | "created_at">[],
+  monthsToUpdate: Month[],
+) {
+  const supabase = createClient()
 
-// Learning rules storage
-export function saveLearningRules(rules: LearningRule[]): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEYS.LEARNING_RULES, JSON.stringify(rules))
-  }
-}
-
-export function getLearningRules(): LearningRule[] {
-  if (typeof window !== "undefined") {
-    const data = localStorage.getItem(STORAGE_KEYS.LEARNING_RULES)
-    return data ? JSON.parse(data) : []
-  }
-  return []
-}
-
-export function addLearningRule(merchantPattern: string, category: string): void {
-  const rules = getLearningRules()
-
-  // Update existing rule or add new one
-  const existingIndex = rules.findIndex((r) => r.merchantPattern.toLowerCase() === merchantPattern.toLowerCase())
-
-  if (existingIndex >= 0) {
-    rules[existingIndex] = {
-      merchantPattern,
-      category: category as any,
-      lastUsed: new Date().toISOString(),
-    }
-  } else {
-    rules.push({
-      merchantPattern,
-      category: category as any,
-      lastUsed: new Date().toISOString(),
-    })
+  // 1. Upsert the month summary data.
+  const { error: monthError } = await supabase.from("months").upsert(monthsToUpdate)
+  if (monthError) {
+    console.error("Error saving months:", monthError.message)
+    // In a real app, you would want to handle this failure, maybe retry or notify the user.
+    return { success: false, error: monthError }
   }
 
-  saveLearningRules(rules)
+  // 2. Insert all the new transactions.
+  const { error: transactionError } = await supabase.from("transactions").insert(transactionsToInsert)
+  if (transactionError) {
+    console.error("Error saving transactions:", transactionError.message)
+    // Attempt to roll back the month update could be added here in a more advanced scenario.
+    return { success: false, error: transactionError }
+  }
+
+  return { success: true }
 }

@@ -3,8 +3,12 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export function createClient() {
-  const cookieStore = cookies()
+/**
+ * Server-side Supabase client factory.
+ * NOTE: Next.js dynamic APIs (cookies) are async – call with `await createClient()`.
+ */
+export async function createClient() {
+  const cookieStore = await cookies()
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,18 +19,10 @@ export function createClient() {
           return cookieStore.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            // The `set` method was called from a Server Component.
-          }
+          cookieStore.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options })
-          } catch (error) {
-            // The `delete` method was called from a Server Component.
-          }
+          cookieStore.set({ name, value: '', ...options })
         },
       },
     }

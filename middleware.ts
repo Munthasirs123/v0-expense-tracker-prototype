@@ -1,9 +1,9 @@
 // middleware.ts
-import { createServerClient } from '@supabase/ssr'
+
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Prepare a response we can mutate with cookies
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -18,33 +18,41 @@ export async function middleware(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options) {
-          // Write to the *response* cookies so they reach the browser
-          response.cookies.set({ name, value, ...options })
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
         },
-        remove(name: string, options) {
-          response.cookies.set({ name, value: '', ...options })
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({ name, value: '', ...options })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
         },
       },
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user && request.nextUrl.pathname !== '/login') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
+  // The primary role of this middleware is to refresh the user's session cookie.
+  // It does this by calling `getUser`.
+  await supabase.auth.getUser()
 
   return response
 }
 
 export const config = {
   matcher: [
-    // exclude public assets, login, and the auth callback
-    '/((?!_next/static|_next/image|favicon.ico|login|auth/callback).*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

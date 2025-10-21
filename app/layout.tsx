@@ -13,7 +13,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Statement Intelligence",
   description: "Turn raw statements into clarity in under a minute",
-  generator: "v0.app",
 }
 
 export default function RootLayout({
