@@ -1,3 +1,4 @@
+// lib/types.ts
 export type Category =
   | "Groceries"
   | "Dining"
@@ -9,24 +10,31 @@ export type Category =
   | "Travel"
   | "Other"
 
+// This mirrors the 'transactions' table in Supabase
 export interface Transaction {
-  id: string
-  date: string
+  id?: number // The database will generate this, so it's optional on creation
+  created_at?: string
+  date: string // Should be in ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ)
   description: string
   amount: number
   category: Category
-  sourceFile: string
-  monthId: string
+  notes?: string
+  source_file?: string
+  month_id: string // Format: "YYYY-MM"
+  user_id: string // The UUID of the authenticated user
 }
 
+// This mirrors the 'months' table in Supabase
 export interface Month {
-  id: string
+  id: string // Format: "YYYY-MM"
+  user_id: string
   name: string
   year: number
-  totalSpend: number
-  transactionCount: number
+  total_spend: number // Note: Supabase schema uses snake_case, but we can map it
+  transaction_count: number
 }
 
+// This is a client-side only type for summarizing data. It remains mostly the same.
 export interface CategorySummary {
   category: Category
   totalSpend: number
@@ -34,8 +42,10 @@ export interface CategorySummary {
   transactions: Transaction[]
 }
 
+// This mirrors the 'learning_rules' table in Supabase
 export interface LearningRule {
-  merchantPattern: string
+  merchant_pattern: string
+  user_id: string
   category: Category
-  lastUsed: string
+  last_used?: string
 }
