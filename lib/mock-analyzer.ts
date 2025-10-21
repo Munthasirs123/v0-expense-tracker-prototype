@@ -1,23 +1,31 @@
 // lib/mock-analyzer.ts
-
 import type { Transaction, Category, LearningRule } from "./types";
 
+// The incoming type now includes `source_file` (snake_case)
+type RawTransaction = {
+  date: string;
+  description: string;
+  amount: number;
+  source_file: string; // MODIFIED
+};
+
+// The return type should also match this.
+type AnalyzedTransaction = Omit<Transaction, "id" | "user_id" | "month_id">;
+
 export function analyzeTransactions(
-  rawTransactions: Array<{ date: string; description: string; amount: number; sourceFile: string }>,
+  rawTransactions: RawTransaction[],
   monthId: string,
   learningRules: LearningRule[],
-): Omit<Transaction, "user_id" | "month_id">[] {
+): AnalyzedTransaction[] {
   return rawTransactions.map((raw) => {
-    const id = Date.now() + Math.random();
     const learnedCategory = findLearnedCategory(raw.description, learningRules);
     const category = learnedCategory || mockCategorize(raw.description);
     return {
-      id,
       date: raw.date,
       description: raw.description,
       amount: Math.abs(raw.amount),
       category,
-      sourceFile: raw.sourceFile,
+      source_file: raw.source_file, // MODIFIED to pass through snake_case
     };
   });
 }
@@ -43,15 +51,4 @@ function mockCategorize(description: string): Category {
     if (desc.includes("doctor")) return "Healthcare";
     if (desc.includes("hotel")) return "Travel";
     return "Other";
-}
-
-function generateMockTransactions(
-  fileName: string,
-): Array<{ date: string; description: string; amount: number; sourceFile: string }> {
-  return [{
-    date: new Date().toISOString().split("T")[0],
-    description: "MOCK - PDF PARSING FAILED OR FOUND NO TRANSACTIONS",
-    amount: -123.45,
-    sourceFile: fileName,
-  }];
 }
