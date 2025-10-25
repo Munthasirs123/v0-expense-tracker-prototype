@@ -42,23 +42,49 @@ export default function MonthPage() {
     
     setMonth(monthData)
 
-    const categoryMap = new Map<Category, CategorySummary>()
+    // MODIFIED: The Map now uses the category's ID (a number) as its key.
+    const categoryMap = new Map<number, CategorySummary>();
+    const uncategorizedSummary: CategorySummary = {
+      // Create a placeholder for any transactions that might be uncategorized.
+      category: { id: -1, name: 'Uncategorized', keywords: [], user_id: user.id },
+      totalSpend: 0,
+      transactionCount: 0,
+      transactions: [],
+    };
+
     for (const transaction of transactions) {
-      if (!categoryMap.has(transaction.category)) {
-        categoryMap.set(transaction.category, {
-          category: transaction.category,
+      const category = transaction.category;
+      // If a transaction has no category, group it under "Uncategorized".
+      if (!category) {
+        uncategorizedSummary.totalSpend += transaction.amount;
+        uncategorizedSummary.transactionCount += 1;
+        uncategorizedSummary.transactions.push(transaction);
+        continue;
+      }
+      
+      // Use the category's unique ID to check if we've seen it before.
+      if (!categoryMap.has(category.id)) {
+        categoryMap.set(category.id, {
+          category: category,
           totalSpend: 0,
           transactionCount: 0,
           transactions: [],
-        })
+        });
       }
-      const summary = categoryMap.get(transaction.category)!
-      summary.totalSpend += transaction.amount
-      summary.transactionCount += 1
-      summary.transactions.push(transaction)
+      
+      const summary = categoryMap.get(category.id)!;
+      summary.totalSpend += transaction.amount;
+      summary.transactionCount += 1;
+      summary.transactions.push(transaction);
     }
 
-    const summaries = Array.from(categoryMap.values()).sort((a, b) => b.totalSpend - a.totalSpend)
+    const summaries = Array.from(categoryMap.values()).sort((a, b) => b.totalSpend - a.totalSpend);
+
+    // If there were any uncategorized transactions, add them to the list.
+    if (uncategorizedSummary.transactionCount > 0) {
+      summaries.push(uncategorizedSummary);
+    }
+
     setCategorySummaries(summaries)
     setIsLoading(false)
   }, [monthId, user])
@@ -176,7 +202,8 @@ export default function MonthPage() {
                 <div className="space-y-3">
                   {categorySummaries.map((summary) => (
                     <CategoryCard
-                      key={summary.category}
+                      // MODIFIED: Use the unique ID from the category object for the key.
+                      key={summary.category?.id || 'uncategorized'}
                       summary={summary}
                       onUpdateTransaction={handleUpdateTransaction}
                     />
